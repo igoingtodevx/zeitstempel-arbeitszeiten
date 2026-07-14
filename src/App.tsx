@@ -11,12 +11,13 @@ import {
   localTimeLabel,
 } from './lib/date';
 import { migrateLegacy, legacyBackup, type MigrationResult } from './migration';
-import { freshBase, restore, saveLocal, softDelete } from './repository';
+import { freshBase, resolveConflict, restore, saveLocal, softDelete } from './repository';
 import { createCsv, createPdf, downloadBlob, reportRows } from './reports';
 import { cloudConfigured, supabase } from './supabase';
 import { installRealtime, installSyncTriggers, pullRemote, syncNow } from './sync';
 import {
   DEFAULT_TARGETS,
+  type Conflict,
   type EntryType,
   type Project,
   type SyncState,
@@ -44,6 +45,7 @@ interface Data {
   entries: TimeEntry[];
   breaks: TimeBreak[];
   settings: UserSettings;
+  conflicts: Conflict[];
 }
 function defaultSettings(userId: string): UserSettings {
   const now = new Date().toISOString();
@@ -81,6 +83,11 @@ export function App() {
       entries: await db.timeEntries.where('user_id').equals(uid).toArray(),
       breaks: await db.timeBreaks.where('user_id').equals(uid).toArray(),
       settings,
+      conflicts: await db.conflicts
+        .where('userId')
+        .equals(uid)
+        .filter((c) => !c.resolvedAt)
+        .toArray(),
     });
   }, []);
   useEffect(() => {
@@ -476,6 +483,11 @@ export function App() {
                 );
               }
             }}
+            onResolve={async (id, choice) => {
+              await resolveConflict(id, choice);
+              await pending();
+              setNotice('Konflikt aufgelöst.');
+            }}
           />
         )}
       </main>
@@ -845,12 +857,14 @@ function Settings({
   onLogout,
   onBackup,
   onImport,
+  onResolve,
 }: {
   data: Data;
   onSaved: () => Promise<void>;
   onLogout: () => void;
   onBackup: () => void;
   onImport: (file: File) => Promise<void>;
+  onResolve: (id: string, choice: 'local' | 'remote') => Promise<void>;
 }) {
   const [s, setS] = useState(data.settings);
   async function save() {
@@ -921,6 +935,27 @@ function Settings({
           Lokale Daten sind nach Benutzer getrennt und bleiben bei App-Updates erhalten.
         </p>
       </section>
+      {data.conflicts.length > 0 && (
+        <section>
+          <h2>Synchronisationskonflikte</h2>
+          <p className="hint">
+            Beide Versionen sind sicher gespeichert. Wähle, welche wiederhergestellt werden soll.
+          </p>
+          {data.conflicts.map((c) => (
+            <div className="conflict" key={c.id}>
+              <strong>
+                {c.table} · {c.recordId.slice(0, 8)}
+              </strong>
+              <div>
+                <button className="secondary" onClick={() => void onResolve(c.id, 'remote')}>
+                  Cloud-Version
+                </button>
+                <button onClick={() => void onResolve(c.id, 'local')}>Meine Version</button>
+              </div>
+            </div>
+          ))}
+        </section>
+      )}
       {cloudConfigured && (
         <section>
           <button className="danger" onClick={onLogout}>

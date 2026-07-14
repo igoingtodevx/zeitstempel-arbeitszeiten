@@ -66,3 +66,16 @@ export function freshBase(userId: string) {
     revision: 0,
   };
 }
+export async function resolveConflict(id: string, choice: 'local' | 'remote') {
+  const conflict = await db.conflicts.get(id);
+  if (!conflict) return;
+  const table = tableMap[conflict.table] as any;
+  if (choice === 'remote') await table.put(conflict.remote);
+  else
+    await saveLocal(conflict.table, {
+      ...conflict.local,
+      revision: Number(conflict.remote.revision ?? 0),
+      updated_at: new Date().toISOString(),
+    } as LocalRecord);
+  await db.conflicts.update(id, { resolvedAt: new Date().toISOString() });
+}

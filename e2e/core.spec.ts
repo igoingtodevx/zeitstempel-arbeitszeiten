@@ -34,3 +34,20 @@ test('funktioniert offline nach Erstladung', async ({ page, context, browserName
     await expect(page.getByRole('button', { name: 'Arbeit beenden' })).toBeVisible();
   }
 });
+test('Eintrag bearbeiten, löschen und wiederherstellen', async ({ page }) => {
+  await page.goto('/');
+  await page.getByRole('button', { name: '+ Eintrag' }).click();
+  await page.getByLabel('Start').fill('2026-07-14T08:00');
+  await page.getByLabel('Ende').fill('2026-07-14T16:30');
+  await page.getByLabel('Tätigkeit').fill('Montage');
+  await page.getByRole('button', { name: 'Speichern' }).click();
+  await page.getByRole('button', { name: 'Zeiten' }).click();
+  await page.getByText('Montage').click();
+  await page.getByLabel('Notiz').fill('Fenster eingesetzt');
+  await page.getByRole('button', { name: 'Speichern' }).click();
+  await expect(page.getByText('Fenster eingesetzt')).toBeVisible();
+  await page.getByText('Löschen').click();
+  await expect(page.getByText(/Rückgängig/)).toBeVisible();
+  await page.getByText(/Rückgängig/).click();
+  await expect(page.getByText('Fenster eingesetzt')).toBeVisible();
+});

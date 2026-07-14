@@ -411,6 +411,17 @@ main {
   height: 1px;
   opacity: 0;
 }
+.conflict {
+  display: grid;
+  gap: 8px;
+  padding: 10px 0;
+  border-top: 1px solid var(--line);
+}
+.conflict > div {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
 .banner {
   margin: 12px 18px 0;
   padding: 12px;
