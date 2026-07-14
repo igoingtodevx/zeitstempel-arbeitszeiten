@@ -36,7 +36,7 @@ VITE_SUPABASE_ANON_KEY=PUBLIC_ANON_KEY
 
 ## Supabase und Auth
 
-Der im Auftrag beschriebene Ist-Stand ist nicht-destruktiv in `supabase/migrations/20260714000000_document_existing_schema.sql` dokumentiert. Die App verwendet ausschließlich die vorgegebenen Tabellen und Spalten.
+Der tatsächliche Ist-Stand von Supabase wurde gegen das Produktionsprojekt abgeglichen und ist nicht-destruktiv in `supabase/migrations/20260714000000_document_existing_schema.sql` dokumentiert. Die Security-Härtung der Triggerfunktionen ist als angewendete Migration `20260714225637_harden_trigger_function_permissions.sql` enthalten. Die App verwendet ausschließlich die vorgegebenen Tabellen und Spalten.
 
 In Supabase Auth müssen folgende Redirect-URLs erlaubt sein:
 
@@ -44,7 +44,7 @@ In Supabase Auth müssen folgende Redirect-URLs erlaubt sein:
 - Vercel Preview: `https://arbeitszeitenapp-*-igoingtodevxs-projects.vercel.app/auth/callback`
 - Vercel Production: `https://arbeitszeitenapp.vercel.app/auth/callback`
 
-Falls der Vercel-Projektname abweicht, wird nur die Production-URL auf die tatsächliche Domain angepasst. Preview und Production benötigen `VITE_SUPABASE_URL` sowie `VITE_SUPABASE_ANON_KEY` in der jeweiligen Vercel-Umgebung.
+Preview und Production benötigen `VITE_SUPABASE_URL` sowie `VITE_SUPABASE_ANON_KEY` in der jeweiligen Vercel-Umgebung. Diese Variablen sind für das verknüpfte Vercel-Projekt bereits gesetzt.
 
 ### Konfliktstrategie
 
@@ -78,5 +78,5 @@ Beim ersten Start werden Rohwerte aus `zt_v1` und `zt_v2` unverändert in Indexe
 ## Verbleibende Grenzen
 
 - Safari kann Website-Speicher unter extremem Speicherdruck trotz `navigator.storage.persist()` räumen; regelmäßige JSON-Backups bleiben sinnvoll.
-- Vollständige Supabase-/Auth-E2E-Tests benötigen ein separates Testprojekt und Testkonto. Die normale Suite läuft ohne Secrets.
+- Vollständige Supabase-/Auth-E2E-Tests benötigen ein separates Testkonto. Die normale Suite läuft ohne Secrets.
 - PDF ist bewusst kompakt; sehr lange Notizen werden umbrochen, nicht als aufwendiges Tabellenlayout gesetzt.
