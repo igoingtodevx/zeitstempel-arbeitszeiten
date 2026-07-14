@@ -41,8 +41,8 @@ Der im Auftrag beschriebene Ist-Stand ist nicht-destruktiv in `supabase/migratio
 In Supabase Auth müssen folgende Redirect-URLs erlaubt sein:
 
 - lokal: `http://localhost:5173/auth/callback`
-- Vercel Preview: `https://*-igoingtodevx.vercel.app/auth/callback`
-- Vercel Production: `https://zeitstempel-arbeitszeiten.vercel.app/auth/callback`
+- Vercel Preview: `https://arbeitszeitenapp-*-igoingtodevxs-projects.vercel.app/auth/callback`
+- Vercel Production: `https://arbeitszeitenapp.vercel.app/auth/callback`
 
 Falls der Vercel-Projektname abweicht, wird nur die Production-URL auf die tatsächliche Domain angepasst. Preview und Production benötigen `VITE_SUPABASE_URL` sowie `VITE_SUPABASE_ANON_KEY` in der jeweiligen Vercel-Umgebung.
 
