@@ -1,5 +1,13 @@
 import { db } from './db';
-import type { OutboxItem, Project, SyncTable, TimeBreak, TimeEntry, UserSettings } from './types';
+import {
+  DEMO_USER_ID,
+  type OutboxItem,
+  type Project,
+  type SyncTable,
+  type TimeBreak,
+  type TimeEntry,
+  type UserSettings,
+} from './types';
 type LocalRecord = Project | TimeEntry | TimeBreak | UserSettings;
 const tableMap = {
   projects: db.projects,
@@ -19,6 +27,7 @@ export async function saveLocal<T extends LocalRecord>(
 ): Promise<T> {
   const id = recordId(table, value);
   const userId = 'user_id' in value ? value.user_id : '';
+  const shouldEnqueue = enqueue && userId !== DEMO_USER_ID;
   const outbox: OutboxItem = {
     id: crypto.randomUUID(),
     userId,
@@ -32,7 +41,7 @@ export async function saveLocal<T extends LocalRecord>(
   };
   await db.transaction('rw', [tableMap[table], db.outbox], async () => {
     await (tableMap[table] as any).put(value);
-    if (enqueue) {
+    if (shouldEnqueue) {
       await db.outbox.where({ table, recordId: id }).delete();
       await db.outbox.add(outbox);
     }

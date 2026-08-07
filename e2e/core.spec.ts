@@ -1,4 +1,12 @@
 import { expect, test } from '@playwright/test';
+test('öffentliche Demo ist ohne Login erreichbar', async ({ page }) => {
+  await page.goto('/?demo=1');
+  await expect(page.getByRole('heading', { name: 'Arbeitszeit' })).toBeVisible();
+  await expect(page.getByText('Demo-Modus')).toBeVisible();
+  await expect(page.getByText('Neubau Müller')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Arbeit starten' })).toBeVisible();
+});
+
 test('Baustelle anlegen, auswählen und Arbeit stempeln', async ({ page }) => {
   await page.goto('/');
   await expect(page.getByRole('heading', { name: 'Arbeitszeit' })).toBeVisible();

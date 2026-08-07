@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { localOnlyUser, sendMagicLink, LOCAL_USER_KEY } from './auth';
 import { importBackup, previewBackup } from './backup';
 import { db, persistStorage } from './db';
+import { DEMO_MODE_KEY, DEMO_USER_ID, ensureDemoData, isDemoUser } from './demo';
 import { formatMinutes, summarizeDay, summarizeRange, weekKeys } from './domain';
 import {
   addLocalDays,
@@ -69,6 +70,7 @@ export function App() {
     [data, setData] = useState<Data | null>(null),
     [syncState, setSyncState] = useState<SyncState>(cloudConfigured ? 'pending' : 'local'),
     [migration, setMigration] = useState<MigrationResult | null>(null);
+  const demoMode = isDemoUser(userId);
   const [selectedProject, setSelectedProject] = useState<string | null>(() =>
       localStorage.getItem('zeitstempel:selected-project'),
     ),
@@ -92,9 +94,17 @@ export function App() {
   }, []);
   useEffect(() => {
     void (async () => {
+      const demoRequested =
+        localStorage.getItem(DEMO_MODE_KEY) === '1' ||
+        new URLSearchParams(location.search).get('demo') === '1';
+      if (demoRequested) {
+        localStorage.setItem(DEMO_MODE_KEY, '1');
+        setUserId(DEMO_USER_ID);
+        setAuthReady(true);
+        return;
+      }
       if (!supabase) {
-        const id = localOnlyUser();
-        setUserId(id);
+        setUserId(localOnlyUser());
         setAuthReady(true);
         return;
       }
@@ -102,6 +112,7 @@ export function App() {
         data: { session },
       } = await supabase.auth.getSession();
       if (session) {
+        localStorage.removeItem(DEMO_MODE_KEY);
         localStorage.setItem(LOCAL_USER_KEY, session.user.id);
         setUserId(session.user.id);
       } else if (!navigator.onLine) {
@@ -109,19 +120,30 @@ export function App() {
       }
       setAuthReady(true);
       supabase.auth.onAuthStateChange((_e, s) => {
-        setUserId(s?.user.id ?? null);
-        if (s) localStorage.setItem(LOCAL_USER_KEY, s.user.id);
+        if (s) {
+          localStorage.removeItem(DEMO_MODE_KEY);
+          setUserId(s.user.id);
+          localStorage.setItem(LOCAL_USER_KEY, s.user.id);
+        } else if (localStorage.getItem(DEMO_MODE_KEY) !== '1') {
+          setUserId(null);
+        }
       });
     })();
   }, []);
   useEffect(() => {
     if (!userId) return;
+    const demo = isDemoUser(userId);
     void (async () => {
       await persistStorage();
-      const result = await migrateLegacy(userId);
-      setMigration(result);
+      if (demo) {
+        await ensureDemoData();
+        setMigration(null);
+      } else {
+        const result = await migrateLegacy(userId);
+        setMigration(result);
+      }
       await refresh(userId);
-      if (cloudConfigured && navigator.onLine) {
+      if (!demo && cloudConfigured && navigator.onLine) {
         try {
           await pullRemote(userId);
           await refresh(userId);
@@ -129,16 +151,19 @@ export function App() {
           setSyncState('error');
         }
         await syncNow(userId, setSyncState);
+      } else if (demo) {
+        setSyncState('local');
       }
     })();
-    const removeTriggers = installSyncTriggers(
-      userId,
-      () => void syncNow(userId, setSyncState).then(() => refresh(userId)),
-    );
-    const removeRealtime = installRealtime(
-      userId,
-      () => void pullRemote(userId).then(() => refresh(userId)),
-    );
+    const removeTriggers = demo
+      ? () => undefined
+      : installSyncTriggers(
+          userId,
+          () => void syncNow(userId, setSyncState).then(() => refresh(userId)),
+        );
+    const removeRealtime = demo
+      ? () => undefined
+      : installRealtime(userId, () => void pullRemote(userId).then(() => refresh(userId)));
     return () => {
       removeTriggers();
       removeRealtime();
@@ -146,10 +171,46 @@ export function App() {
   }, [userId, refresh]);
   const pending = useCallback(async () => {
     if (!userId) return;
+    const demo = isDemoUser(userId);
     await refresh(userId);
-    setSyncState(cloudConfigured ? 'pending' : 'local');
-    void syncNow(userId, setSyncState).then(() => refresh(userId));
+    setSyncState(demo || !cloudConfigured ? 'local' : 'pending');
+    if (!demo && cloudConfigured) void syncNow(userId, setSyncState).then(() => refresh(userId));
   }, [userId, refresh]);
+  async function handleSync() {
+    if (!userId) return;
+    if (isDemoUser(userId)) {
+      setNotice('Demo-Modus: Diese Daten bleiben nur auf diesem Gerät.');
+      return;
+    }
+    await syncNow(userId, setSyncState);
+    await refresh(userId);
+  }
+  function enterDemo() {
+    localStorage.setItem(DEMO_MODE_KEY, '1');
+    const url = new URL(location.href);
+    url.searchParams.set('demo', '1');
+    history.replaceState(null, '', url);
+    setData(null);
+    setMigration(null);
+    setSyncState('local');
+    setTab('clock');
+    setUserId(DEMO_USER_ID);
+  }
+  async function leaveSession() {
+    try {
+      if (userId && !isDemoUser(userId)) await supabase?.auth.signOut();
+    } finally {
+      localStorage.removeItem(LOCAL_USER_KEY);
+      localStorage.removeItem(DEMO_MODE_KEY);
+      const url = new URL(location.href);
+      url.searchParams.delete('demo');
+      history.replaceState(null, '', url);
+      setData(null);
+      setMigration(null);
+      setNotice('');
+      setUserId(null);
+    }
+  }
   if (!authReady)
     return (
       <main className="center">
@@ -162,6 +223,7 @@ export function App() {
         email={email}
         setEmail={setEmail}
         message={authMessage}
+        onDemo={enterDemo}
         onSubmit={async () => {
           try {
             await sendMagicLink(email);
@@ -271,12 +333,23 @@ export function App() {
         </div>
         <button
           className={`sync ${syncState}`}
-          onClick={() => void syncNow(userId, setSyncState).then(() => refresh(userId))}
+          onClick={() => void handleSync()}
           aria-label="Jetzt synchronisieren"
         >
           ● {syncText[syncState]}
         </button>
       </header>
+      {demoMode && (
+        <aside className="banner demo-banner" role="status">
+          <div>
+            <strong>Demo-Modus</strong>
+            <span>Beispieldaten zum Anschauen. Es wird nichts in die Cloud synchronisiert.</span>
+          </div>
+          <button className="secondary" onClick={() => void leaveSession()}>
+            Zur Anmeldung
+          </button>
+        </aside>
+      )}
       {migration && migration.status !== 'none' && (
         <aside className={`banner ${migration.errors.length ? 'warning' : ''}`}>
           {migration.imported} alte Einträge übernommen.
@@ -444,12 +517,9 @@ export function App() {
         {tab === 'settings' && (
           <Settings
             data={data}
+            demoMode={demoMode}
             onSaved={pending}
-            onLogout={async () => {
-              await supabase?.auth.signOut();
-              localStorage.removeItem(LOCAL_USER_KEY);
-              setUserId(null);
-            }}
+            onLogout={() => void leaveSession()}
             onBackup={async () => {
               const backup = {
                 version: 2,
@@ -527,11 +597,13 @@ function Login({
   email,
   setEmail,
   message,
+  onDemo,
   onSubmit,
 }: {
   email: string;
   setEmail: (s: string) => void;
   message: string;
+  onDemo: () => void;
   onSubmit: () => void;
 }) {
   return (
@@ -550,6 +622,13 @@ function Login({
           />
         </label>
         <button onClick={onSubmit}>Anmeldelink senden</button>
+        <div className="login-divider" aria-hidden="true">
+          <span>oder</span>
+        </div>
+        <button type="button" className="secondary" onClick={onDemo}>
+          Demo ansehen – ohne Login
+        </button>
+        <p className="hint">Die Demo nutzt nur lokale Beispieldaten und verändert kein Konto.</p>
         {message && <p role="status">{message}</p>}
       </div>
     </main>
@@ -853,6 +932,7 @@ function ProjectDialog({
 }
 function Settings({
   data,
+  demoMode,
   onSaved,
   onLogout,
   onBackup,
@@ -860,6 +940,7 @@ function Settings({
   onResolve,
 }: {
   data: Data;
+  demoMode: boolean;
   onSaved: () => Promise<void>;
   onLogout: () => void;
   onBackup: () => void;
@@ -956,10 +1037,15 @@ function Settings({
           ))}
         </section>
       )}
-      {cloudConfigured && (
+      {(cloudConfigured || demoMode) && (
         <section>
+          {demoMode && (
+            <p className="hint">
+              Du bist in der öffentlichen Vorschau. Deine Änderungen bleiben lokal.
+            </p>
+          )}
           <button className="danger" onClick={onLogout}>
-            Abmelden
+            {demoMode ? 'Demo verlassen' : 'Abmelden'}
           </button>
         </section>
       )}

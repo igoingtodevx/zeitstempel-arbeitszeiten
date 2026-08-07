@@ -14,6 +14,15 @@ Eine bewusst einfache, vollständig deutsche und local-first Arbeitszeiterfassun
 
 Ohne Supabase-Variablen startet automatisch ein lokaler Offline-Modus. Dieser ist für Entwicklung und Geräte-Tests gedacht; späteres automatisches Umschlüsseln eines lokalen Geräteprofils in ein Cloud-Konto ist bewusst nicht implementiert.
 
+## Öffentliche Vorschau ohne Login
+
+Die Oberfläche kann ohne Konto als lokale Demo geöffnet werden:
+
+- Production-Demo (nach Deployment): `https://arbeitszeitenapp.vercel.app/?demo=1`
+- lokal: `http://localhost:5173/?demo=1`
+
+Die Demo legt ausschließlich Beispieldaten in einem getrennten lokalen `demo-preview`-Profil an. Änderungen werden nicht an Supabase gesendet. Echte Arbeitsdaten bleiben hinter dem E-Mail-Magic-Link-Login geschützt. Auf der Login-Seite gibt es zusätzlich den Button „Demo ansehen – ohne Login“.
+
 ## Entwicklung
 
 ```bash

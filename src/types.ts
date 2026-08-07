@@ -2,6 +2,7 @@ export type EntryType = 'work' | 'vacation' | 'sick' | 'holiday' | 'other_absenc
 export type EntrySource = 'clock' | 'manual' | 'migration' | 'import';
 export type SyncState = 'local' | 'syncing' | 'synced' | 'pending' | 'error';
 export type WeekdayTargets = Record<string, number>;
+export const DEMO_USER_ID = 'demo-preview';
 export interface BaseRecord {
   id: string;
   user_id: string;

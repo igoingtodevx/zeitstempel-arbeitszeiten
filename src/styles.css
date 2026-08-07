@@ -432,6 +432,24 @@ main {
 .banner.warning {
   background: #fff0cf;
 }
+.demo-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.demo-banner > div {
+  display: grid;
+  gap: 3px;
+}
+.demo-banner span {
+  color: var(--muted);
+  line-height: 1.4;
+}
+.demo-banner button {
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
 .toast {
   position: fixed;
   left: 50%;
@@ -467,6 +485,20 @@ main {
   line-height: 1.5;
   color: var(--muted);
 }
+.login-divider {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--muted);
+  font-size: 12px;
+}
+.login-divider::before,
+.login-divider::after {
+  content: '';
+  height: 1px;
+  flex: 1;
+  background: var(--line);
+}
 @media (max-width: 420px) {
   .app > header {
     align-items: center;
@@ -489,6 +521,10 @@ main {
   .stamp {
     width: 156px;
     height: 156px;
+  }
+  .demo-banner {
+    align-items: stretch;
+    flex-direction: column;
   }
 }
 @media (prefers-reduced-motion: reduce) {
