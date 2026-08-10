@@ -5,6 +5,8 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "convex:dev": "convex dev",
+    "convex:once": "convex dev --once",
     "build": "tsc -b && vite build",
     "typecheck": "tsc -b --pretty false",
     "lint": "eslint .",
@@ -15,7 +17,9 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@supabase/supabase-js": "^2.57.4",
+    "@auth/core": "^0.41.1",
+    "@convex-dev/auth": "^0.0.94",
+    "convex": "^1.43.0",
     "dexie": "^4.2.0",
     "jspdf": "^4.2.1",
     "react": "^19.1.1",

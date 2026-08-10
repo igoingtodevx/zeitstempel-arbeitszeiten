@@ -29,7 +29,10 @@ export class ZeitstempelDB extends Dexie {
 export const db = new ZeitstempelDB();
 export async function persistStorage() {
   try {
-    return (await navigator.storage?.persist?.()) ?? false;
+    return await Promise.race([
+      (navigator.storage?.persist?.() ?? Promise.resolve(false)),
+      new Promise<boolean>((resolve) => window.setTimeout(() => resolve(false), 750)),
+    ]);
   } catch {
     return false;
   }

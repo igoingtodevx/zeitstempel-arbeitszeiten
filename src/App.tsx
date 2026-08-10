@@ -1,5 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { localOnlyUser, sendMagicLink, LOCAL_USER_KEY } from './auth';
+import { useAuthActions } from '@convex-dev/auth/react';
+import { useConvexAuth, useQuery } from 'convex/react';
+import { api } from '../convex/_generated/api';
+import { LOCAL_USER_KEY } from './auth';
 import { importBackup, previewBackup } from './backup';
 import { db, persistStorage } from './db';
 import { DEMO_MODE_KEY, DEMO_USER_ID, ensureDemoData, isDemoUser } from './demo';
@@ -14,7 +17,7 @@ import {
 import { migrateLegacy, legacyBackup, type MigrationResult } from './migration';
 import { freshBase, resolveConflict, restore, saveLocal, softDelete } from './repository';
 import { createCsv, createPdf, downloadBlob, reportRows } from './reports';
-import { cloudConfigured, supabase } from './supabase';
+import { convexConfigured } from './convex';
 import { installRealtime, installSyncTriggers, pullRemote, syncNow } from './sync';
 import {
   DEFAULT_TARGETS,
@@ -68,7 +71,7 @@ export function App() {
     [authMessage, setAuthMessage] = useState('');
   const [tab, setTab] = useState<Tab>('clock'),
     [data, setData] = useState<Data | null>(null),
-    [syncState, setSyncState] = useState<SyncState>(cloudConfigured ? 'pending' : 'local'),
+    [syncState, setSyncState] = useState<SyncState>(convexConfigured ? 'pending' : 'local'),
     [migration, setMigration] = useState<MigrationResult | null>(null);
   const demoMode = isDemoUser(userId);
   const [selectedProject, setSelectedProject] = useState<string | null>(() =>
@@ -92,44 +95,29 @@ export function App() {
         .toArray(),
     });
   }, []);
+  const { isAuthenticated, isLoading: authLoading } = useConvexAuth();
+  const { signIn, signOut } = useAuthActions();
+  const currentUser = useQuery(api.currentUser.get, isAuthenticated ? {} : 'skip');
   useEffect(() => {
-    void (async () => {
-      const demoRequested =
-        localStorage.getItem(DEMO_MODE_KEY) === '1' ||
-        new URLSearchParams(location.search).get('demo') === '1';
-      if (demoRequested) {
-        localStorage.setItem(DEMO_MODE_KEY, '1');
-        setUserId(DEMO_USER_ID);
-        setAuthReady(true);
-        return;
-      }
-      if (!supabase) {
-        setUserId(localOnlyUser());
-        setAuthReady(true);
-        return;
-      }
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
-      if (session) {
-        localStorage.removeItem(DEMO_MODE_KEY);
-        localStorage.setItem(LOCAL_USER_KEY, session.user.id);
-        setUserId(session.user.id);
-      } else if (!navigator.onLine) {
-        setUserId(localStorage.getItem(LOCAL_USER_KEY));
-      }
+    const demoRequested =
+      localStorage.getItem(DEMO_MODE_KEY) === '1' ||
+      new URLSearchParams(location.search).get('demo') === '1';
+    if (demoRequested) {
+      localStorage.setItem(DEMO_MODE_KEY, '1');
+      setUserId(DEMO_USER_ID);
       setAuthReady(true);
-      supabase.auth.onAuthStateChange((_e, s) => {
-        if (s) {
-          localStorage.removeItem(DEMO_MODE_KEY);
-          setUserId(s.user.id);
-          localStorage.setItem(LOCAL_USER_KEY, s.user.id);
-        } else if (localStorage.getItem(DEMO_MODE_KEY) !== '1') {
-          setUserId(null);
-        }
-      });
-    })();
-  }, []);
+      return;
+    }
+    if (authLoading || (isAuthenticated && currentUser === undefined)) return;
+    if (currentUser) {
+      localStorage.removeItem(DEMO_MODE_KEY);
+      localStorage.setItem(LOCAL_USER_KEY, currentUser.id);
+      setUserId(currentUser.id);
+    } else {
+      setUserId(null);
+    }
+    setAuthReady(true);
+  }, [authLoading, currentUser, isAuthenticated]);
   useEffect(() => {
     if (!userId) return;
     const demo = isDemoUser(userId);
@@ -143,7 +131,7 @@ export function App() {
         setMigration(result);
       }
       await refresh(userId);
-      if (!demo && cloudConfigured && navigator.onLine) {
+      if (!demo && convexConfigured && navigator.onLine) {
         try {
           await pullRemote(userId);
           await refresh(userId);
@@ -173,8 +161,8 @@ export function App() {
     if (!userId) return;
     const demo = isDemoUser(userId);
     await refresh(userId);
-    setSyncState(demo || !cloudConfigured ? 'local' : 'pending');
-    if (!demo && cloudConfigured) void syncNow(userId, setSyncState).then(() => refresh(userId));
+    setSyncState(demo || !convexConfigured ? 'local' : 'pending');
+    if (!demo && convexConfigured) void syncNow(userId, setSyncState).then(() => refresh(userId));
   }, [userId, refresh]);
   async function handleSync() {
     if (!userId) return;
@@ -198,7 +186,7 @@ export function App() {
   }
   async function leaveSession() {
     try {
-      if (userId && !isDemoUser(userId)) await supabase?.auth.signOut();
+      if (userId && !isDemoUser(userId)) await signOut();
     } finally {
       localStorage.removeItem(LOCAL_USER_KEY);
       localStorage.removeItem(DEMO_MODE_KEY);
@@ -224,10 +212,14 @@ export function App() {
         setEmail={setEmail}
         message={authMessage}
         onDemo={enterDemo}
-        onSubmit={async () => {
+        onSubmit={async (password, mode) => {
           try {
-            await sendMagicLink(email);
-            setAuthMessage('Anmeldelink gesendet. Bitte E-Mail öffnen.');
+            const formData = new FormData();
+            formData.set('email', email);
+            formData.set('password', password);
+            formData.set('flow', mode);
+            await signIn('password', formData);
+            setAuthMessage('Anmeldung erfolgreich.');
           } catch (e) {
             setAuthMessage(e instanceof Error ? e.message : 'Anmeldung fehlgeschlagen');
           }
@@ -604,14 +596,16 @@ function Login({
   setEmail: (s: string) => void;
   message: string;
   onDemo: () => void;
-  onSubmit: () => void;
+  onSubmit: (password: string, mode: 'signIn' | 'signUp') => void | Promise<void>;
 }) {
+  const [password, setPassword] = useState('');
+  const [mode, setMode] = useState<'signIn' | 'signUp'>('signIn');
   return (
     <main className="login">
       <div className="login-card">
         <span className="eyebrow">Zeitstempel</span>
         <h1>Einfach Arbeitszeit erfassen</h1>
-        <p>Deine vorhandenen Daten bleiben auch ohne Verbindung auf diesem Gerät verfügbar.</p>
+        <p>Deine Arbeitszeiten werden über Convex sicher synchronisiert und bleiben offline verfügbar.</p>
         <label>
           E-Mail
           <input
@@ -621,7 +615,25 @@ function Login({
             autoComplete="email"
           />
         </label>
-        <button onClick={onSubmit}>Anmeldelink senden</button>
+        <label>
+          Passwort
+          <input
+            type="password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            autoComplete={mode === 'signIn' ? 'current-password' : 'new-password'}
+          />
+        </label>
+        <button onClick={() => onSubmit(password, mode)}>
+          {mode === 'signIn' ? 'Anmelden' : 'Konto erstellen'}
+        </button>
+        <button
+          type="button"
+          className="link-button"
+          onClick={() => setMode(mode === 'signIn' ? 'signUp' : 'signIn')}
+        >
+          {mode === 'signIn' ? 'Neues Konto erstellen' : 'Bereits registriert? Anmelden'}
+        </button>
         <div className="login-divider" aria-hidden="true">
           <span>oder</span>
         </div>
@@ -1037,7 +1049,7 @@ function Settings({
           ))}
         </section>
       )}
-      {(cloudConfigured || demoMode) && (
+      {(convexConfigured || demoMode) && (
         <section>
           {demoMode && (
             <p className="hint">
