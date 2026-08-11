@@ -15,11 +15,18 @@ Eine bewusst einfache, vollständig deutsche und local-first Arbeitszeiterfassun
 Ohne `VITE_CONVEX_URL` kann die lokale Demo ohne Konto gestartet werden. Echte Konten und Synchronisierung benötigen ein erreichbares Convex-Deployment.
 
 Convex ist das Backend der App. Der lokale Entwicklungs-Stack wird mit `npm run convex:once` gestartet. Das Production-Build nutzt die bereitgestellte Convex-Cloud-Deployment-URL aus `.env.production`; das Schema liegt in `convex/schema.ts`, Auth in `convex/auth.ts`, Datenzugriff in `convex/records.ts`. Es ist keine Datenmigration erforderlich, weil das frühere Backend leer ist.
+
+## Status und Umfang
+
+**Implementierter Browser/PWA-Prototyp.** Der aktuelle Quellstand enthält die lokale Zeiterfassung, Convex-Auth/Sync, Offline-Outbox, Konfliktkopien, Migration, CSV/PDF-Export und eine Demo ohne Login. Eine native iOS-App oder ein separates Mobile-Binary ist nicht Bestandteil dieses Repositories.
+
+Eine separate Feature-Roadmap ist im Repository nicht festgelegt. Für einen produktiven Betrieb müssen ein erreichbares Convex-Deployment und ein separates Testkonto für den vollständigen Auth-E2E-Pfad vorhanden sein; beides wird hier nicht als bereits bereitgestellt behauptet.
+
 ## Öffentliche Vorschau ohne Login
 
 Die Oberfläche kann ohne Konto als lokale Demo geöffnet werden:
 
-- Production-Demo (nach Deployment): `https://arbeitszeitenapp.vercel.app/?demo=1`
+- Verifizierte anonyme Production-Demo: `https://arbeitszeitenapp.vercel.app/?demo=1`
 - lokal: `http://localhost:5173/?demo=1`
 
 Die Demo legt ausschließlich Beispieldaten in einem getrennten lokalen `demo-preview`-Profil an. Änderungen werden nicht an Convex gesendet. Echte Arbeitsdaten bleiben hinter dem Convex-Auth-Login geschützt. Auf der Login-Seite gibt es zusätzlich den Button „Demo ansehen – ohne Login“.
