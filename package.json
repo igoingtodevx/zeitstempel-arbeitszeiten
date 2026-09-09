@@ -9,6 +9,7 @@
     "convex:once": "convex dev --once",
     "build": "tsc -b && vite build",
     "typecheck": "tsc -b --pretty false",
+    "convex:typecheck": "tsc -p convex/tsconfig.json --noEmit",
     "lint": "eslint .",
     "format": "prettier --write .",
     "test": "vitest run",
@@ -17,10 +18,11 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@auth/core": "^0.41.1",
+    "@auth/core": "^0.41.3",
     "@convex-dev/auth": "^0.0.94",
     "convex": "^1.43.0",
     "dexie": "^4.2.0",
+    "dompurify": "^3.4.15",
     "jspdf": "^4.2.1",
     "react": "^19.1.1",
     "react-dom": "^19.1.1",

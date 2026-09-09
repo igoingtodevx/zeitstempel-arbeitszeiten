@@ -7,7 +7,7 @@ Eine bewusst einfache, vollständig deutsche und local-first Arbeitszeiterfassun
 - Vite, React und TypeScript Strict Mode
 - Dexie/IndexedDB als primäre Datenquelle, getrennt nach `user_id`
 - atomare Entitäts-/Outbox-Transaktionen, Soft Deletes und persistente Konfliktkopien
-- Convex Auth mit E-Mail/Passwort, reaktive Queries und revisionsgeprüfter Sync
+- Convex Auth mit E-Mail/Passwort, reaktive Queries und serverseitig geschützter, revisionsgeprüfter Compare-and-swap-Sync
 - zentrale Europe/Berlin-Domainlogik für UI, Wochen-/Monatssummen, CSV und PDF
 - Workbox-PWA mit App-Shell-Cache, Update-Hinweis, Safe Areas und lokalen Icons
 - idempotente Migration von `zt_v1` und `zt_v2` mit unveränderter Rohdatensicherung
@@ -31,18 +31,28 @@ Die Oberfläche kann ohne Konto als lokale Demo geöffnet werden:
 
 Die Demo legt ausschließlich Beispieldaten in einem getrennten lokalen `demo-preview`-Profil an. Änderungen werden nicht an Convex gesendet. Echte Arbeitsdaten bleiben hinter dem Convex-Auth-Login geschützt. Auf der Login-Seite gibt es zusätzlich den Button „Demo ansehen – ohne Login“.
 
+## Verifizierte Grenzen
+
+- Die öffentliche URL und Demo antworten mit HTTP 200 und wurden im Browser bei 1440×900 und 390×844 geprüft. Der Demo-Stempelablauf inklusive Pause, Reload, Ausstempeln und Offline-Zustand läuft ohne App-/Console-Fehler.
+- Der verifizierte Live-Stand ist die Production-Auslieferung von `origin/main` (`a4c9aff9c0533d3e4511bcb8f9c8dd235d5bfd16`). Ein nicht gemergter Feature-Branch verändert Production nicht automatisch. Die in diesem Branch gehärtete serverseitige CAS-Logik ist erst nach einem kontrollierten Deployment live.
+- Authentifizierte Convex-E2E-Tests mit einem separaten Testkonto sind nicht Bestandteil der automatisierten Suite. Signup, Login, Session-Wiederherstellung und Logout müssen vor einem Release mit einem dafür vorgesehenen Testkonto geprüft werden.
+- Eine native iOS-App wird nicht behauptet; Safari/PWA-Hardwareprüfung bleibt eine manuelle Prüfung.
+
 ## Entwicklung
 
 ```bash
-npm install
+npm ci
 npm run dev
 npm run typecheck
+npm run convex:typecheck
 npm run lint
 npm test
 npm run test:e2e
 npm run build
 npm run preview
 ```
+
+`npm run test:e2e` baut zuerst die Anwendung und startet einen eigenen Preview-Server auf Port `4174`. Mit `PLAYWRIGHT_PORT=...` kann der Port geändert werden; ein bereits laufender fremder Server wird nicht wiederverwendet.
 
 Lokale Konfiguration (`.env.local`):
 
