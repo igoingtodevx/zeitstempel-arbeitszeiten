@@ -1,31 +1,86 @@
 import type { TimeBreak, TimeEntry, WeekdayTargets } from './types';
 import { addLocalDays, localDateKey, monthKeys, startOfWeek } from './lib/date';
-export const minutesBetween = (a: string, b: string) =>
-  Math.max(0, Math.round((Date.parse(b) - Date.parse(a)) / 60000));
-export function recordedBreakMinutes(entry: TimeEntry, breaks: TimeBreak[]): number {
+
+const DATE_KEY = /^([0-9]{4})-([0-9]{2})-([0-9]{2})$/;
+const ENTRY_TYPES = new Set(['work', 'vacation', 'sick', 'holiday', 'other_absence']);
+
+function isValidDateKey(value: string) {
+  const match = DATE_KEY.exec(value);
+  if (!match) return false;
+  const date = new Date(Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3]), 12));
   return (
-    entry.manual_break_minutes +
+    date.getUTCFullYear() === Number(match[1]) &&
+    date.getUTCMonth() === Number(match[2]) - 1 &&
+    date.getUTCDate() === Number(match[3])
+  );
+}
+
+function isIsoInstant(value: string | null): value is string {
+  return value !== null && Number.isFinite(Date.parse(value));
+}
+
+function validMinutes(value: number, max = 1440) {
+  return Number.isInteger(value) && value >= 0 && value <= max;
+}
+
+/** Returns elapsed real minutes; malformed or backwards intervals never become NaN. */
+export const minutesBetween = (a: string, b: string) => {
+  const start = Date.parse(a);
+  const end = Date.parse(b);
+  if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start) return 0;
+  return Math.round((end - start) / 60000);
+};
+
+export function validateTimeEntry(entry: TimeEntry): string[] {
+  const errors: string[] = [];
+  if (!isValidDateKey(entry.work_date)) errors.push('Das Datum ist ungültig.');
+  if (!ENTRY_TYPES.has(entry.entry_type)) errors.push('Der Eintragstyp ist ungültig.');
+  if (!validMinutes(entry.manual_break_minutes)) errors.push('Die manuelle Pause ist ungültig.');
+  if (!validMinutes(entry.automatically_added_break_minutes))
+    errors.push('Die automatisch ergänzte Pause ist ungültig.');
+  if (entry.entry_type === 'work') {
+    if (!isIsoInstant(entry.started_at)) errors.push('Eine Arbeitszeit braucht einen gültigen Start.');
+    if (entry.ended_at !== null && !isIsoInstant(entry.ended_at))
+      errors.push('Das Ende ist ungültig.');
+    if (isIsoInstant(entry.started_at) && isIsoInstant(entry.ended_at) && Date.parse(entry.ended_at) <= Date.parse(entry.started_at))
+      errors.push('Das Ende muss nach dem Start liegen.');
+  } else if (
+    entry.started_at !== null ||
+    entry.ended_at !== null ||
+    entry.manual_break_minutes !== 0 ||
+    entry.automatically_added_break_minutes !== 0
+  ) {
+    errors.push('Abwesenheiten dürfen keine Arbeitszeit enthalten.');
+  }
+  return errors;
+}
+
+export function recordedBreakMinutes(entry: TimeEntry, breaks: TimeBreak[]): number {
+  const manual = validMinutes(entry.manual_break_minutes) ? entry.manual_break_minutes : 0;
+  return (
+    manual +
     breaks
       .filter((b) => b.time_entry_id === entry.id && !b.deleted_at && b.ended_at)
       .reduce((n, b) => n + minutesBetween(b.started_at, b.ended_at!), 0)
   );
 }
 export function grossMinutes(entry: TimeEntry, now = new Date()): number {
-  return entry.started_at
+  return entry.entry_type === 'work' && entry.started_at
     ? minutesBetween(entry.started_at, entry.ended_at ?? now.toISOString())
     : 0;
 }
 export function minimumBreak(gross: number): number {
   return gross > 9 * 60 ? 45 : gross > 6 * 60 ? 30 : 0;
 }
-export function entryNetMinutes(entry: TimeEntry, breaks: TimeBreak[], now = new Date()): number {
+export function entryNetMinutes(
+  entry: TimeEntry,
+  breaks: TimeBreak[],
+  now = new Date(),
+  automaticBreakMinutes = entry.automatically_added_break_minutes,
+): number {
   if (entry.entry_type !== 'work') return 0;
-  return Math.max(
-    0,
-    grossMinutes(entry, now) -
-      recordedBreakMinutes(entry, breaks) -
-      entry.automatically_added_break_minutes,
-  );
+  const automatic = validMinutes(automaticBreakMinutes) ? automaticBreakMinutes : 0;
+  return Math.max(0, grossMinutes(entry, now) - recordedBreakMinutes(entry, breaks) - automatic);
 }
 export function targetForDate(key: string, targets: WeekdayTargets): number {
   const [y, m, d] = key.split('-').map(Number);
@@ -56,9 +111,13 @@ export function summarizeDay(
   automaticBreakEnabled = true,
 ): DaySummary {
   const entries = all.filter((e) => e.work_date === date && !e.deleted_at);
-  const gross = entries.reduce((n, e) => n + grossMinutes(e, now), 0);
-  const recordedBreak = entries.reduce((n, e) => n + recordedBreakMinutes(e, breaks), 0);
-  const currentAuto = entries.reduce((n, e) => n + e.automatically_added_break_minutes, 0);
+  const workEntries = entries.filter((e) => e.entry_type === 'work');
+  const gross = workEntries.reduce((n, e) => n + grossMinutes(e, now), 0);
+  const recordedBreak = workEntries.reduce((n, e) => n + recordedBreakMinutes(e, breaks), 0);
+  const currentAuto = workEntries.reduce(
+    (n, e) => n + (validMinutes(e.automatically_added_break_minutes) ? e.automatically_added_break_minutes : 0),
+    0,
+  );
   const required = minimumBreak(gross);
   const automaticBreak = automaticBreakEnabled
     ? Math.max(currentAuto, Math.max(0, required - recordedBreak))
@@ -80,6 +139,29 @@ export function summarizeDay(
     balance: work - target,
     entries,
   };
+}
+
+/**
+ * Allocates a day-level statutory break to the first work block when it was not
+ * persisted on an entry. This keeps per-entry exports consistent with the day total.
+ */
+export function automaticBreakAllocation(day: DaySummary): Map<string, number> {
+  const allocation = new Map<string, number>();
+  let persisted = 0;
+  for (const entry of day.entries) {
+    const value = validMinutes(entry.automatically_added_break_minutes)
+      ? entry.automatically_added_break_minutes
+      : 0;
+    allocation.set(entry.id, value);
+    if (entry.entry_type === 'work') persisted += value;
+  }
+  let remaining = Math.max(0, day.automaticBreak - persisted);
+  for (const entry of day.entries) {
+    if (entry.entry_type !== 'work' || remaining <= 0) continue;
+    allocation.set(entry.id, (allocation.get(entry.id) ?? 0) + remaining);
+    remaining = 0;
+  }
+  return allocation;
 }
 export function summarizeRange(
   keys: string[],

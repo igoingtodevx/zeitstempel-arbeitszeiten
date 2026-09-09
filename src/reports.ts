@@ -1,5 +1,5 @@
 import { jsPDF } from 'jspdf';
-import { entryNetMinutes, summarizeDay } from './domain';
+import { automaticBreakAllocation, entryNetMinutes, recordedBreakMinutes, summarizeDay } from './domain';
 import { localDateLabel, localTimeLabel } from './lib/date';
 import type { Project, TimeBreak, TimeEntry, WeekdayTargets } from './types';
 export interface ReportRow {
@@ -11,6 +11,7 @@ export interface ReportRow {
   start: string;
   end: string;
   breakMinutes: number;
+  automaticBreakMinutes: number;
   netMinutes: number;
   targetMinutes: number | '';
   balanceMinutes: number | '';
@@ -33,8 +34,10 @@ export function reportRows(
   automaticBreakEnabled = true,
 ): ReportRow[] {
   const out: ReportRow[] = [];
+  const now = new Date();
   for (const key of keys) {
-    const day = summarizeDay(key, entries, breaks, targets, new Date(), automaticBreakEnabled);
+    const day = summarizeDay(key, entries, breaks, targets, now, automaticBreakEnabled);
+    const automaticByEntry = automaticBreakAllocation(day);
     const active = day.entries;
     if (!active.length) {
       out.push({
@@ -46,6 +49,7 @@ export function reportRows(
         start: '',
         end: '',
         breakMinutes: 0,
+        automaticBreakMinutes: 0,
         netMinutes: 0,
         targetMinutes: day.target,
         balanceMinutes: day.balance,
@@ -56,6 +60,7 @@ export function reportRows(
     }
     active.forEach((entry, index) => {
       const project = projects.find((p) => p.id === entry.project_id);
+      const automaticBreakMinutes = automaticByEntry.get(entry.id) ?? 0;
       out.push({
         date: localDateLabel(key),
         weekday: localDateLabel(key, { weekday: 'long' }),
@@ -64,8 +69,9 @@ export function reportRows(
         type: labels[entry.entry_type],
         start: localTimeLabel(entry.started_at),
         end: localTimeLabel(entry.ended_at),
-        breakMinutes: entry.manual_break_minutes,
-        netMinutes: entryNetMinutes(entry, breaks),
+        breakMinutes: recordedBreakMinutes(entry, breaks),
+        automaticBreakMinutes,
+        netMinutes: entryNetMinutes(entry, breaks, now, automaticBreakMinutes),
         targetMinutes: index ? '' : day.target,
         balanceMinutes: index ? '' : day.balance,
         activity: entry.activity,
@@ -86,6 +92,7 @@ export function createCsv(rows: ReportRow[]): string {
     'Start',
     'Ende',
     'Pause (Min)',
+    'Automatische Pause (Min)',
     'Netto (Min)',
     'Sollzeit (Min)',
     'Tagessaldo (Min)',
@@ -106,6 +113,7 @@ export function createCsv(rows: ReportRow[]): string {
           r.start,
           r.end,
           r.breakMinutes,
+          r.automaticBreakMinutes,
           r.netMinutes,
           r.targetMinutes,
           r.balanceMinutes,
@@ -130,7 +138,7 @@ export function createPdf(rows: ReportRow[]): Blob {
       y = 15;
     }
     doc.text(
-      `${r.date} ${r.project || ''} ${r.start}${r.start ? '–' : ''}${r.end} · Netto ${r.netMinutes} min · Saldo ${r.balanceMinutes}`,
+      `${r.date} ${r.project || ''} ${r.start}${r.start ? '–' : ''}${r.end} · Pause ${r.breakMinutes} min + ${r.automaticBreakMinutes} min automatisch · Netto ${r.netMinutes} min · Saldo ${r.balanceMinutes}`,
       14,
       y,
       { maxWidth: 180 },

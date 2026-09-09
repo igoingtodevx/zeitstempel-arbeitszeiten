@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { ZeitstempelDB } from '../db';
+import { ZeitstempelDB, db } from '../db';
+import { freshBase, saveLocal } from '../repository';
 describe('IndexedDB', () => {
   const names: string[] = [];
   afterEach(async () => {
@@ -42,5 +43,27 @@ describe('IndexedDB', () => {
     expect(await reopened.projects.get('p')).toBeTruthy();
     expect(await reopened.outbox.count()).toBe(1);
     reopened.close();
+  });
+  it('überschreibt keine lokale ID eines anderen Benutzers', async () => {
+    await db.delete();
+    await db.open();
+    const id = `ownership-${crypto.randomUUID()}`;
+    const original = {
+      ...freshBase('user-a'),
+      id,
+      name: 'Original',
+      customer: '',
+      address: '',
+      color: '#000000',
+      note: '',
+      is_archived: false,
+    };
+    await saveLocal('projects', original);
+    await expect(
+      saveLocal('projects', { ...original, user_id: 'user-b', name: 'Fremd' }),
+    ).rejects.toThrow(/anderen lokalen Benutzer/);
+    expect(await db.projects.get(id)).toMatchObject({ user_id: 'user-a', name: 'Original' });
+    await db.delete();
+    await db.open();
   });
 });

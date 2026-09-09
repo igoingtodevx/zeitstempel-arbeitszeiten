@@ -3,8 +3,10 @@ import {
   currentMonthKeys,
   entryNetMinutes,
   formatMinutes,
+  minutesBetween,
   summarizeDay,
   summarizeRange,
+  validateTimeEntry,
   weekKeys,
 } from '../domain';
 import { berlinLocalToIso, localDateKey } from '../lib/date';
@@ -52,6 +54,10 @@ describe('Europe/Berlin Kalender', () => {
     ]));
   it('konvertiert lokale Berlin-Zeit', () =>
     expect(berlinLocalToIso('2026-01-15', '08:00')).toBe('2026-01-15T07:00:00.000Z'));
+  it('behandelt die wiederholte Herbstzeit eindeutig', () =>
+    expect(berlinLocalToIso('2026-10-25', '02:30')).toBe('2026-10-25T01:30:00.000Z'));
+  it('weist nicht existente Frühlingszeiten zurück', () =>
+    expect(() => berlinLocalToIso('2026-03-29', '02:30')).toThrow(/existiert/));
 });
 describe('Dauern und Summen', () => {
   it('berechnet normale Schicht und Pause', () =>
@@ -66,6 +72,14 @@ describe('Dauern und Summen', () => {
   it('berücksichtigt DST', () => {
     expect(entryNetMinutes(entry('2026-03-28T21:00:00Z', '2026-03-29T04:00:00Z'), [])).toBe(420);
     expect(entryNetMinutes(entry('2026-10-24T20:00:00Z', '2026-10-25T05:00:00Z'), [])).toBe(540);
+  });
+  it('behandelt fehlerhafte oder rückwärts laufende Intervalle sicher', () => {
+    expect(minutesBetween('kaputt', '2026-02-10T10:00:00Z')).toBe(0);
+    expect(minutesBetween('2026-02-10T11:00:00Z', '2026-02-10T10:00:00Z')).toBe(0);
+    expect(entryNetMinutes(entry('2026-02-10T10:00:00Z', '2026-02-10T10:00:00Z'), [])).toBe(0);
+    expect(validateTimeEntry(entry('2026-02-10T10:00:00Z', '2026-02-10T10:00:00Z'))).toContain(
+      'Das Ende muss nach dem Start liegen.',
+    );
   });
   it('ergänzt Mindestpause nur einmal über mehrere Blöcke', () => {
     const es = [

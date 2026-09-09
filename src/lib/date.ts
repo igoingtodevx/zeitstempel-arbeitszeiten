@@ -48,12 +48,48 @@ export function monthKeys(year: number, month1: number): string[] {
   }
   return out;
 }
+
+function localParts(value: Date, formatter: Intl.DateTimeFormat) {
+  const parts = formatter.formatToParts(value);
+  const get = (type: Intl.DateTimeFormatPartTypes) => parts.find((part) => part.type === type)?.value ?? '';
+  return `${get('year')}-${get('month')}-${get('day')}T${get('hour')}:${get('minute')}`;
+}
+
+/**
+ * Converts a Europe/Berlin wall-clock value to an instant without doing offset
+ * arithmetic. Ambiguous fall-back times use the later occurrence; nonexistent
+ * spring-forward times are rejected instead of being silently shifted.
+ */
 export function berlinLocalToIso(dateKey: string, time: string, dayOffset = 0): string {
+  const baseMatch = /^([0-9]{4})-([0-9]{2})-([0-9]{2})$/.exec(dateKey);
+  if (!baseMatch) throw new RangeError('Ungültiges Datum');
+  const baseDate = new Date(Date.UTC(Number(baseMatch[1]), Number(baseMatch[2]) - 1, Number(baseMatch[3]), 12));
+  if (
+    baseDate.getUTCFullYear() !== Number(baseMatch[1]) ||
+    baseDate.getUTCMonth() !== Number(baseMatch[2]) - 1 ||
+    baseDate.getUTCDate() !== Number(baseMatch[3])
+  )
+    throw new RangeError('Ungültiges Datum');
   const target = addLocalDays(dateKey, dayOffset);
-  const [y, m, d] = target.split('-').map(Number);
-  const [h, min] = time.split(':').map(Number);
-  const desired = Date.UTC(y!, m! - 1, d!, h!, min!);
-  let guess = desired;
+  const dateMatch = /^([0-9]{4})-([0-9]{2})-([0-9]{2})$/.exec(target);
+  const timeMatch = /^([0-9]{2}):([0-9]{2})$/.exec(time);
+  if (!dateMatch || !timeMatch) throw new RangeError('Ungültige lokale Zeit');
+  const y = Number(dateMatch[1]);
+  const m = Number(dateMatch[2]);
+  const d = Number(dateMatch[3]);
+  const h = Number(timeMatch[1]);
+  const min = Number(timeMatch[2]);
+  const calendar = new Date(Date.UTC(y, m - 1, d, 12));
+  if (
+    calendar.getUTCFullYear() !== y ||
+    calendar.getUTCMonth() !== m - 1 ||
+    calendar.getUTCDate() !== d ||
+    h > 23 ||
+    min > 59
+  )
+    throw new RangeError('Ungültige lokale Zeit');
+
+  const desired = `${target}T${time}`;
   const formatter = new Intl.DateTimeFormat('en-CA', {
     timeZone: ZONE,
     year: 'numeric',
@@ -63,20 +99,12 @@ export function berlinLocalToIso(dateKey: string, time: string, dayOffset = 0): 
     minute: '2-digit',
     hourCycle: 'h23',
   });
-  for (let i = 0; i < 3; i++) {
-    const shown = formatter.formatToParts(new Date(guess));
-    const get = (type: Intl.DateTimeFormatPartTypes) =>
-      Number(shown.find((p) => p.type === type)?.value);
-    const represented = Date.UTC(
-      get('year'),
-      get('month') - 1,
-      get('day'),
-      get('hour'),
-      get('minute'),
-    );
-    const delta = desired - represented;
-    if (!delta) break;
-    guess += delta;
+  const pseudoUtc = Date.UTC(y, m - 1, d, h, min);
+  const candidates: number[] = [];
+  for (let offset = -3 * 60; offset <= 3 * 60; offset++) {
+    const instant = pseudoUtc + offset * 60_000;
+    if (localParts(new Date(instant), formatter) === desired) candidates.push(instant);
   }
-  return new Date(guess).toISOString();
+  if (!candidates.length) throw new RangeError('Diese lokale Zeit existiert wegen der Zeitumstellung nicht.');
+  return new Date(candidates[candidates.length - 1]!).toISOString();
 }

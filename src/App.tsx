@@ -5,8 +5,8 @@ import { api } from '../convex/_generated/api';
 import { LOCAL_USER_KEY } from './auth';
 import { importBackup, previewBackup } from './backup';
 import { db, persistStorage } from './db';
-import { DEMO_MODE_KEY, DEMO_USER_ID, ensureDemoData, isDemoUser } from './demo';
-import { formatMinutes, summarizeDay, summarizeRange, weekKeys } from './domain';
+import { DEMO_MODE_KEY, DEMO_USER_ID, ensureDemoData, isDemoUser, resetDemoData } from './demo';
+import { formatMinutes, summarizeDay, summarizeRange, validateTimeEntry, weekKeys } from './domain';
 import {
   addLocalDays,
   berlinLocalToIso,
@@ -232,7 +232,11 @@ export function App() {
         <p>Arbeitszeiten werden geladen …</p>
       </main>
     );
-  const active = data.entries.find((e) => !e.deleted_at && e.entry_type === 'work' && !e.ended_at);
+  const activeEntries = data.entries.filter(
+    (e) => !e.deleted_at && e.entry_type === 'work' && !e.ended_at,
+  );
+  const active = activeEntries[0];
+  const multipleActive = activeEntries.length > 1;
   const openBreak = active
     ? data.breaks.find((b) => b.time_entry_id === active.id && !b.deleted_at && !b.ended_at)
     : undefined;
@@ -254,6 +258,11 @@ export function App() {
     data.settings.automatic_break_enabled,
   );
   async function startStop() {
+    if (!userId) return;
+    if (multipleActive) {
+      setNotice('Mehrere offene Arbeitszeiten gefunden. Bitte zuerst einen Eintrag schließen.');
+      return;
+    }
     if (active) {
       const ended = new Date().toISOString();
       if (openBreak)
@@ -296,7 +305,32 @@ export function App() {
     await pending();
   }
   async function saveEntry(entry: TimeEntry) {
-    await saveLocal('time_entries', entry);
+    const normalized = {
+      ...entry,
+      work_date:
+        entry.entry_type === 'work' && entry.started_at ? localDateKey(entry.started_at) : entry.work_date,
+    };
+    const validation = validateTimeEntry(normalized);
+    if (validation.length) {
+      setNotice(validation[0]!);
+      return;
+    }
+    if (normalized.entry_type === 'work' && normalized.source === 'manual' && !normalized.ended_at) {
+      setNotice('Manuelle Einträge brauchen ein Ende.');
+      return;
+    }
+    const anotherActive = data!.entries.find(
+      (candidate) =>
+        candidate.id !== normalized.id &&
+        !candidate.deleted_at &&
+        candidate.entry_type === 'work' &&
+        !candidate.ended_at,
+    );
+    if (anotherActive && normalized.entry_type === 'work' && !normalized.ended_at) {
+      setNotice('Es läuft bereits eine Arbeitszeit.');
+      return;
+    }
+    await saveLocal('time_entries', normalized);
     setEntryDialog(null);
     await pending();
   }
@@ -337,9 +371,28 @@ export function App() {
             <strong>Demo-Modus</strong>
             <span>Beispieldaten zum Anschauen. Es wird nichts in die Cloud synchronisiert.</span>
           </div>
-          <button className="secondary" onClick={() => void leaveSession()}>
-            Zur Anmeldung
-          </button>
+          <div className="demo-actions">
+            <button
+              className="secondary"
+              onClick={() =>
+                void (async () => {
+                  await resetDemoData();
+                  await refresh(DEMO_USER_ID);
+                  setNotice('Demo zurückgesetzt.');
+                })()
+              }
+            >
+              Demo zurücksetzen
+            </button>
+            <button className="secondary" onClick={() => void leaveSession()}>
+              Zur Anmeldung
+            </button>
+          </div>
+        </aside>
+      )}
+      {multipleActive && (
+        <aside className="banner warning" role="alert">
+          Mehrere offene Arbeitszeiten gefunden. Bitte unter „Zeiten“ Einträge schließen, bevor du weiter stempelst.
         </aside>
       )}
       {migration && migration.status !== 'none' && (
@@ -746,7 +799,11 @@ function EntryDialog({
   function parseLocal(s: string) {
     if (!s) return null;
     const [date, time] = s.split('T');
-    return berlinLocalToIso(date!, time!);
+    try {
+      return berlinLocalToIso(date!, time!);
+    } catch {
+      return null;
+    }
   }
   return (
     <div className="overlay" role="presentation">
@@ -769,7 +826,17 @@ function EntryDialog({
           Typ
           <select
             value={v.entry_type}
-            onChange={(e) => setV({ ...v, entry_type: e.target.value as EntryType })}
+            onChange={(e) => {
+              const entryType = e.target.value as EntryType;
+              setV({
+                ...v,
+                entry_type: entryType,
+                started_at: entryType === 'work' ? v.started_at : null,
+                ended_at: entryType === 'work' ? v.ended_at : null,
+                manual_break_minutes: entryType === 'work' ? v.manual_break_minutes : 0,
+                automatically_added_break_minutes: entryType === 'work' ? v.automatically_added_break_minutes : 0,
+              });
+            }}
           >
             {Object.entries(typeLabel).map(([k, l]) => (
               <option key={k} value={k}>
@@ -820,6 +887,7 @@ function EntryDialog({
                 type="datetime-local"
                 value={localInput(v.ended_at)}
                 onChange={(e) => setV({ ...v, ended_at: parseLocal(e.target.value) })}
+                required={v.source === 'manual'}
               />
             </label>
             <label>

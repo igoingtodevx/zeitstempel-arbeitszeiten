@@ -40,9 +40,15 @@ export async function saveLocal<T extends LocalRecord>(
     lastError: null,
   };
   await db.transaction('rw', [tableMap[table], db.outbox], async () => {
+    const existing = await (tableMap[table] as any).get(id);
+    if (existing && existing.user_id !== userId)
+      throw new Error('Datensatz gehört bereits einem anderen lokalen Benutzer.');
     await (tableMap[table] as any).put(value);
     if (shouldEnqueue) {
-      await db.outbox.where({ table, recordId: id }).delete();
+      await db.outbox
+        .where({ table, recordId: id })
+        .filter((item) => item.userId === userId)
+        .delete();
       await db.outbox.add(outbox);
     }
   });
@@ -79,12 +85,31 @@ export async function resolveConflict(id: string, choice: 'local' | 'remote') {
   const conflict = await db.conflicts.get(id);
   if (!conflict) return;
   const table = tableMap[conflict.table] as any;
-  if (choice === 'remote') await table.put(conflict.remote);
-  else
+  if (choice === 'remote') {
+    await db.transaction('rw', [table, db.outbox, db.conflicts], async () => {
+      await table.put(conflict.remote);
+      await db.outbox
+        .where({ table: conflict.table, recordId: conflict.recordId })
+        .filter((item) => item.userId === conflict.userId)
+        .delete();
+      await db.conflicts.update(id, { resolvedAt: new Date().toISOString() });
+    });
+  } else {
     await saveLocal(conflict.table, {
       ...conflict.local,
       revision: Number(conflict.remote.revision ?? 0),
       updated_at: new Date().toISOString(),
     } as LocalRecord);
-  await db.conflicts.update(id, { resolvedAt: new Date().toISOString() });
+    await db.conflicts.update(id, { resolvedAt: new Date().toISOString() });
+  }
+}
+
+export async function hasUnresolvedConflict(userId: string, table: SyncTable, recordId: string) {
+  return Boolean(
+    await db.conflicts
+      .where('userId')
+      .equals(userId)
+      .filter((conflict) => conflict.table === table && conflict.recordId === recordId && !conflict.resolvedAt)
+      .first(),
+  );
 }

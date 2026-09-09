@@ -109,3 +109,14 @@ export async function ensureDemoData() {
     false,
   );
 }
+
+export async function resetDemoData() {
+  await db.transaction('rw', [db.projects, db.timeEntries, db.timeBreaks, db.settings, db.outbox], async () => {
+    await db.projects.where('user_id').equals(DEMO_USER_ID).delete();
+    await db.timeEntries.where('user_id').equals(DEMO_USER_ID).delete();
+    await db.timeBreaks.where('user_id').equals(DEMO_USER_ID).delete();
+    await db.settings.delete(DEMO_USER_ID);
+    await db.outbox.where('userId').equals(DEMO_USER_ID).delete();
+  });
+  await ensureDemoData();
+}

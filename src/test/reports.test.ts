@@ -37,6 +37,30 @@ describe('Exporte', () => {
     expect(rows[1]?.targetMinutes).toBe('');
     expect(rows[1]?.balanceMinutes).toBe('');
   });
+  it('weist gemessene und automatisch ergänzte Pausen getrennt aus', () => {
+    const rows = reportRows(
+      ['2026-02-09'],
+      [base('a', '2026-02-09T07:00:00Z', '2026-02-09T16:00:00Z')],
+      [
+        {
+          id: 'break-a',
+          user_id: 'u',
+          time_entry_id: 'a',
+          started_at: '2026-02-09T11:00:00Z',
+          ended_at: '2026-02-09T11:15:00Z',
+          created_at: '2026-02-09T11:00:00Z',
+          updated_at: '2026-02-09T11:15:00Z',
+          deleted_at: null,
+          revision: 0,
+        },
+      ],
+      [],
+      DEFAULT_TARGETS,
+    );
+    expect(rows[0]?.breakMinutes).toBe(15);
+    expect(rows[0]?.automaticBreakMinutes).toBe(15);
+    expect(rows[0]?.netMinutes).toBe(510);
+  });
   it('erzeugt BOM und korrektes Quoting', () => {
     const csv = createCsv(
       reportRows(
