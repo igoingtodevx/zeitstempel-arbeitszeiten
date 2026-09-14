@@ -111,11 +111,72 @@ p {
 main {
   padding: 18px 18px 30px;
 }
+.quick-entry {
+  display: grid;
+  gap: 16px;
+  padding: 22px;
+  margin-bottom: 22px;
+  border-radius: 22px;
+  background: #18352e;
+  color: white;
+  box-shadow: 0 14px 32px #18352e20;
+}
+.quick-entry h2 {
+  margin: 4px 0 8px;
+  font-size: 24px;
+}
+.quick-entry p {
+  color: #d9e5e0;
+  line-height: 1.5;
+}
+.quick-entry .eyebrow {
+  color: #b7d2c7;
+}
+.primary-entry {
+  width: 100%;
+  min-height: 56px;
+  background: #f5efe0;
+  color: var(--ink);
+  font-size: 17px;
+}
+.section-subtitle {
+  margin-top: 3px;
+  color: var(--muted);
+  font-size: 13px;
+}
+.small-action {
+  min-height: 42px;
+  padding: 8px 12px;
+}
 .hero {
   border-radius: 24px;
   background: #e2ecdf;
   padding: 20px;
   margin-bottom: 24px;
+}
+.clock-card {
+  margin-top: 24px;
+  background: #f1f2ed;
+  border: 1px solid var(--line);
+}
+.clock-card-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+.clock-card-heading h2 {
+  margin: 2px 0 0;
+}
+.optional-badge {
+  padding: 5px 8px;
+  border-radius: 999px;
+  background: #fff;
+  color: var(--muted);
+  border: 1px solid var(--line);
+  font-size: 11px;
+  font-weight: 700;
 }
 .hero label,
 .dialog label,
@@ -156,16 +217,12 @@ main {
   color: var(--muted);
   margin: -8px 0 14px;
 }
-.stamp {
-  display: block;
-  margin: auto;
-  width: 172px;
-  height: 172px;
-  border-radius: 50%;
-  font-size: 19px;
-  box-shadow: 0 12px 26px #245f4e38;
+.clock-action {
+  width: 100%;
+  min-height: 52px;
+  font-size: 16px;
 }
-.stamp.stop {
+.clock-action.stop {
   background: var(--red);
 }
 .pause {
@@ -185,23 +242,33 @@ main {
   margin: 0;
 }
 .entry {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  width: 100%;
+  align-items: center;
+  background: white;
+  border: 1px solid var(--line);
+  margin-bottom: 8px;
+  border-radius: 12px;
+  overflow: hidden;
+}
+.entry-main {
   display: flex;
   width: 100%;
   justify-content: space-between;
   align-items: center;
-  text-align: left;
-  background: white;
-  color: var(--ink);
-  border: 1px solid var(--line);
-  margin-bottom: 8px;
   gap: 12px;
+  text-align: left;
+  background: transparent;
+  color: var(--ink);
+  border-radius: 0;
 }
-.entry span {
+.entry-main span {
   display: grid;
   gap: 3px;
   min-width: 0;
 }
-.entry span:nth-child(2) {
+.entry-main span:nth-child(2) {
   text-align: right;
 }
 .entry small {
@@ -211,10 +278,14 @@ main {
   text-overflow: ellipsis;
   max-width: 210px;
 }
-.entry i {
-  font-style: normal;
+.entry-delete {
+  align-self: stretch;
+  border-left: 1px solid var(--line);
+  border-radius: 0;
+  background: #fff;
   color: var(--red);
   font-size: 12px;
+  padding-inline: 12px;
 }
 .empty {
   border: 1px dashed var(--line);
@@ -320,6 +391,22 @@ main {
   padding: 22px 20px calc(24px + env(safe-area-inset-bottom));
   display: grid;
   gap: 14px;
+}
+.dialog-heading {
+  display: grid;
+  gap: 4px;
+  margin-bottom: 2px;
+}
+.dialog-heading h2 {
+  margin: 0;
+}
+.dialog-heading p {
+  color: var(--muted);
+  line-height: 1.45;
+  font-size: 13px;
+}
+.next-day {
+  margin-top: -4px;
 }
 .dialog textarea {
   min-height: 80px;
@@ -524,9 +611,13 @@ main {
   .project-card button {
     grid-column: 2;
   }
-  .stamp {
-    width: 156px;
-    height: 156px;
+  .entry {
+    grid-template-columns: 1fr;
+  }
+  .entry-delete {
+    min-height: 40px;
+    border-left: 0;
+    border-top: 1px solid var(--line);
   }
   .demo-banner {
     align-items: stretch;

@@ -220,8 +220,12 @@ export function App() {
             formData.set('flow', mode);
             await signIn('password', formData);
             setAuthMessage('Anmeldung erfolgreich.');
-          } catch (e) {
-            setAuthMessage(e instanceof Error ? e.message : 'Anmeldung fehlgeschlagen');
+          } catch {
+            setAuthMessage(
+              mode === 'signIn'
+                ? 'Anmeldung nicht möglich. Bitte E-Mail und Passwort prüfen.'
+                : 'Konto konnte nicht erstellt werden. Bitte Eingaben prüfen und erneut versuchen.',
+            );
           }
         }}
       />
@@ -349,7 +353,7 @@ export function App() {
           <span className="eyebrow">Zeitstempel</span>
           <h1>
             {tab === 'clock'
-              ? 'Arbeitszeit'
+              ? 'Heute'
               : tab === 'times'
                 ? 'Zeiten'
                 : tab === 'projects'
@@ -423,7 +427,39 @@ export function App() {
       <main>
         {tab === 'clock' && (
           <>
-            <section className="hero">
+            <section className="quick-entry">
+              <div>
+                <span className="eyebrow">Schnell erfassen</span>
+                <h2>Arbeitszeit eintragen</h2>
+                <p>Beginn, Ende und Pause eintragen – fertig. Du kannst alles später ändern.</p>
+              </div>
+              <button className="primary-entry" onClick={() => setEntryDialog(newEntry(userId, today))}>
+                Arbeitszeit eintragen
+              </button>
+            </section>
+            <section>
+              <div className="section-title">
+                <div>
+                  <h2>Heute</h2>
+                  <p className="section-subtitle">{formatMinutes(todaySummary.work)} erfasst</p>
+                </div>
+                <button className="secondary small-action" onClick={() => setEntryDialog(newEntry(userId, today))}>
+                  + Eintrag
+                </button>
+              </div>
+              <EntryList
+                entries={recent.filter((e) => e.work_date === today).slice(0, 5)}
+                onEdit={setEntryDialog}
+              />
+            </section>
+            <section className="hero clock-card">
+              <div className="clock-card-heading">
+                <div>
+                  <span className="eyebrow">Optional</span>
+                  <h2>Stempeluhr</h2>
+                </div>
+                <span className="optional-badge">Komfortfunktion</span>
+              </div>
               <label htmlFor="project-select">Baustelle</label>
               <select
                 id="project-select"
@@ -456,8 +492,8 @@ export function App() {
                   </>
                 ) : (
                   <>
-                    <strong>Bereit</strong>
-                    <span>Heute {formatMinutes(todaySummary.work)} erfasst</span>
+                    <strong>Nicht gestartet</strong>
+                    <span>Nur nutzen, wenn du live stempeln möchtest.</span>
                   </>
                 )}
               </p>
@@ -466,7 +502,7 @@ export function App() {
                 {formatMinutes(todaySummary.automaticBreak)} · netto{' '}
                 {formatMinutes(todaySummary.work)}
               </p>
-              <button className={`stamp ${active ? 'stop' : ''}`} onClick={() => void startStop()}>
+              <button className={`clock-action ${active ? 'stop' : ''}`} onClick={() => void startStop()}>
                 {active ? 'Arbeit beenden' : 'Arbeit starten'}
               </button>
               {active && (
@@ -481,16 +517,6 @@ export function App() {
               </div>
               <EntryList
                 entries={recent.filter((e) => e.work_date !== today).slice(0, 3)}
-                onEdit={setEntryDialog}
-              />
-            </section>
-            <section>
-              <div className="section-title">
-                <h2>Heute</h2>
-                <button onClick={() => setEntryDialog(newEntry(userId, today))}>+ Eintrag</button>
-              </div>
-              <EntryList
-                entries={recent.filter((e) => e.work_date === today).slice(0, 5)}
                 onEdit={setEntryDialog}
               />
             </section>
@@ -609,7 +635,7 @@ export function App() {
       <nav aria-label="Hauptnavigation">
         {(
           [
-            ['clock', 'Stempeln'],
+            ['clock', 'Heute'],
             ['times', 'Zeiten'],
             ['projects', 'Baustellen'],
             ['settings', 'Einstellungen'],
@@ -623,6 +649,7 @@ export function App() {
       {entryDialog && (
         <EntryDialog
           value={entryDialog}
+          isNew={!data.entries.some((entry) => entry.id === entryDialog.id)}
           projects={data.projects}
           onClose={() => setEntryDialog(null)}
           onSave={saveEntry}
@@ -658,7 +685,7 @@ function Login({
       <div className="login-card">
         <span className="eyebrow">Zeitstempel</span>
         <h1>Einfach Arbeitszeit erfassen</h1>
-        <p>Deine Arbeitszeiten werden über Convex sicher synchronisiert und bleiben offline verfügbar.</p>
+        <p>Deine Arbeitszeiten bleiben auch offline verfügbar und werden bei Verbindung sicher synchronisiert.</p>
         <label>
           E-Mail
           <input
@@ -739,68 +766,67 @@ function EntryList({
   return (
     <div className="entries">
       {entries.map((e) => (
-        <button className="entry" key={e.id} onClick={() => onEdit(e)}>
-          <span>
-            <strong>{e.project_name_snapshot || typeLabel[e.entry_type]}</strong>
-            <small>
-              {localDateLabel(e.work_date)} · {typeLabel[e.entry_type]}
-            </small>
-          </span>
-          <span>
-            <strong>
-              {e.entry_type === 'work'
-                ? `${localTimeLabel(e.started_at)}–${localTimeLabel(e.ended_at)}`
-                : typeLabel[e.entry_type]}
-            </strong>
-            <small>{e.note || e.activity || 'Bearbeiten'}</small>
-          </span>
+        <article className="entry" key={e.id}>
+          <button className="entry-main" onClick={() => onEdit(e)} aria-label="Eintrag bearbeiten">
+            <span>
+              <strong>
+                {e.entry_type === 'work' ? e.project_name_snapshot || 'Ohne Baustelle' : typeLabel[e.entry_type]}
+              </strong>
+              <small>
+                {localDateLabel(e.work_date)} · {typeLabel[e.entry_type]}
+              </small>
+            </span>
+            <span>
+              <strong>
+                {e.entry_type === 'work'
+                  ? `${localTimeLabel(e.started_at)}–${localTimeLabel(e.ended_at)}`
+                  : typeLabel[e.entry_type]}
+              </strong>
+              <small>{e.note || e.activity || 'Tippen zum Bearbeiten'}</small>
+            </span>
+          </button>
           {onDelete && (
-            <i
-              role="button"
-              tabIndex={0}
-              onClick={(ev) => {
-                ev.stopPropagation();
-                onDelete(e);
-              }}
-            >
+            <button className="entry-delete" onClick={() => onDelete(e)} aria-label="Eintrag löschen">
               Löschen
-            </i>
+            </button>
           )}
-        </button>
+        </article>
       ))}
     </div>
   );
 }
 function EntryDialog({
   value,
+  isNew,
   projects,
   onClose,
   onSave,
 }: {
   value: TimeEntry;
+  isNew: boolean;
   projects: Project[];
   onClose: () => void;
   onSave: (v: TimeEntry) => void;
 }) {
   const [v, setV] = useState(value);
-  function localInput(iso: string | null) {
+  const [startTime, setStartTime] = useState(() => localClock(value.started_at));
+  const [endTime, setEndTime] = useState(() => localClock(value.ended_at));
+  const [nextDay, setNextDay] = useState(() =>
+    Boolean(value.ended_at && localDateKey(value.ended_at) !== value.work_date),
+  );
+  function localClock(iso: string | null) {
     if (!iso) return '';
-    const d = new Date(iso);
-    const parts = new Intl.DateTimeFormat('sv-SE', {
+    return new Intl.DateTimeFormat('de-DE', {
       timeZone: 'Europe/Berlin',
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
       hour: '2-digit',
       minute: '2-digit',
-    }).format(d);
-    return parts.replace(' ', 'T');
+      hourCycle: 'h23',
+    }).format(new Date(iso));
   }
-  function parseLocal(s: string) {
-    if (!s) return null;
-    const [date, time] = s.split('T');
+  function parseLocalTime(time: string, dayOffset = 0) {
+    if (!time) return null;
     try {
-      return berlinLocalToIso(date!, time!);
+      return berlinLocalToIso(v.work_date, time, dayOffset);
     } catch {
       return null;
     }
@@ -816,12 +842,22 @@ function EntryDialog({
           const project = projects.find((p) => p.id === v.project_id);
           void onSave({
             ...v,
+            started_at: v.entry_type === 'work' ? parseLocalTime(startTime) : null,
+            ended_at: v.entry_type === 'work' ? parseLocalTime(endTime, nextDay ? 1 : 0) : null,
             project_name_snapshot: project?.name ?? 'Ohne Baustelle',
             updated_at: new Date().toISOString(),
           });
         }}
       >
-        <h2>Eintrag bearbeiten</h2>
+        <div className="dialog-heading">
+          <span className="eyebrow">{isNew ? 'Neu' : 'Ändern'}</span>
+          <h2>{isNew ? 'Arbeitszeit eintragen' : 'Eintrag bearbeiten'}</h2>
+          <p>
+            {isNew
+              ? 'Nur das Nötige eintragen. Alles kann später korrigiert werden.'
+              : 'Änderungen werden direkt auf diesem Gerät gespeichert.'}
+          </p>
+        </div>
         <label>
           Typ
           <select
@@ -854,53 +890,66 @@ function EntryDialog({
             required
           />
         </label>
-        <label>
-          Baustelle
-          <select
-            value={v.project_id ?? ''}
-            onChange={(e) => setV({ ...v, project_id: e.target.value || null })}
-          >
-            <option value="">Ohne Baustelle</option>
-            {projects
-              .filter((p) => !p.deleted_at)
-              .map((p) => (
-                <option value={p.id} key={p.id}>
-                  {p.name}
-                </option>
-              ))}
-          </select>
-        </label>
         {v.entry_type === 'work' && (
-          <div className="form-grid">
+          <>
             <label>
-              Start
-              <input
-                type="datetime-local"
-                value={localInput(v.started_at)}
-                onChange={(e) => setV({ ...v, started_at: parseLocal(e.target.value) })}
-                required
-              />
+              Baustelle
+              <select
+                value={v.project_id ?? ''}
+                onChange={(e) => setV({ ...v, project_id: e.target.value || null })}
+              >
+                <option value="">Ohne Baustelle</option>
+                {projects
+                  .filter((p) => !p.deleted_at && !p.is_archived)
+                  .map((p) => (
+                    <option value={p.id} key={p.id}>
+                      {p.name}
+                    </option>
+                  ))}
+              </select>
             </label>
-            <label>
-              Ende
+            <div className="form-grid time-grid">
+              <label>
+                Start
+                <input
+                  type="time"
+                  value={startTime}
+                  onChange={(e) => setStartTime(e.target.value)}
+                  required
+                />
+              </label>
+              <label>
+                Ende
+                <input
+                  type="time"
+                  value={endTime}
+                  onChange={(e) => setEndTime(e.target.value)}
+                  required={v.source === 'manual'}
+                />
+              </label>
+              <label>
+                Pause in Minuten
+                <input
+                  type="number"
+                  min="0"
+                  max="600"
+                  value={v.manual_break_minutes}
+                  onChange={(e) => setV({ ...v, manual_break_minutes: Number(e.target.value) })}
+                />
+              </label>
+            </div>
+            <label className="check next-day">
               <input
-                type="datetime-local"
-                value={localInput(v.ended_at)}
-                onChange={(e) => setV({ ...v, ended_at: parseLocal(e.target.value) })}
-                required={v.source === 'manual'}
-              />
+                type="checkbox"
+                checked={nextDay}
+                onChange={(e) => {
+                  const checked = e.target.checked;
+                  setNextDay(checked);
+                }}
+              />{' '}
+              Ende ist am nächsten Tag
             </label>
-            <label>
-              Pause (Min.)
-              <input
-                type="number"
-                min="0"
-                max="600"
-                value={v.manual_break_minutes}
-                onChange={(e) => setV({ ...v, manual_break_minutes: Number(e.target.value) })}
-              />
-            </label>
-          </div>
+          </>
         )}
         <label>
           Tätigkeit

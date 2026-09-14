@@ -1,6 +1,6 @@
 # Zeitstempel Arbeitszeiten
 
-Eine bewusst einfache, vollständig deutsche und local-first Arbeitszeiterfassung für iPhone und Desktop. Baustellen, Stempelvorgänge, Pausen und Änderungen werden zuerst atomar in IndexedDB gespeichert. Eine persistente Outbox synchronisiert sie anschließend mit Convex; Netzwerkfehler löschen niemals lokale Daten.
+Eine bewusst einfache, vollständig deutsche und local-first Arbeitszeiterfassung für iPhone und Desktop. Der Hauptweg ist die schnelle nachträgliche Erfassung und Korrektur von Beginn, Ende und Pause; die Stempeluhr bleibt eine optionale Komfortfunktion. Arbeitszeiten, Baustellen, Pausen und Änderungen werden zuerst atomar in IndexedDB gespeichert. Eine persistente Outbox synchronisiert sie anschließend mit Convex; Netzwerkfehler löschen niemals lokale Daten.
 
 ## Architektur
 
