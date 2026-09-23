@@ -35,6 +35,7 @@ test('funktioniert offline nach Erstladung', async ({ page, context, browserName
   await page.reload();
   await context.setOffline(true);
   await page.getByRole('button', { name: 'Live stempeln' }).click();
+  await expect(page.getByRole('button', { name: 'Laufende Zeit beenden' })).toBeVisible();
   if (browserName === 'chromium') await page.reload();
   await expect(page.getByRole('button', { name: 'Laufende Zeit beenden' })).toBeVisible();
   await context.setOffline(false);
