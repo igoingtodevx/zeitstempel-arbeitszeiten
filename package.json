@@ -8,6 +8,8 @@
     "convex:dev": "convex dev",
     "convex:once": "convex dev --once",
     "build": "tsc -b && vite build",
+    "check": "npm run typecheck && npm run lint && npm test && npm run build",
+    "audit:prod": "npm audit --omit=dev",
     "typecheck": "tsc -b --pretty false",
     "lint": "eslint .",
     "format": "prettier --write .",

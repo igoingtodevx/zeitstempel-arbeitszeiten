@@ -1,4 +1,3 @@
-import { jsPDF } from 'jspdf';
 import { entryNetMinutes, summarizeDay } from './domain';
 import { localDateLabel, localTimeLabel } from './lib/date';
 import type { Project, TimeBreak, TimeEntry, WeekdayTargets } from './types';
@@ -117,27 +116,6 @@ export function createCsv(rows: ReportRow[]): string {
       ),
     ].join('\r\n')
   );
-}
-export function createPdf(rows: ReportRow[]): Blob {
-  const doc = new jsPDF();
-  doc.setFontSize(18);
-  doc.text('Stundennachweis', 14, 16);
-  doc.setFontSize(8);
-  let y = 25;
-  for (const r of rows) {
-    if (y > 280) {
-      doc.addPage();
-      y = 15;
-    }
-    doc.text(
-      `${r.date} ${r.project || ''} ${r.start}${r.start ? '–' : ''}${r.end} · Netto ${r.netMinutes} min · Saldo ${r.balanceMinutes}`,
-      14,
-      y,
-      { maxWidth: 180 },
-    );
-    y += 6;
-  }
-  return doc.output('blob');
 }
 export function downloadBlob(blob: Blob, name: string) {
   const url = URL.createObjectURL(blob);
