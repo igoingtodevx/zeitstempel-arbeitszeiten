@@ -1,93 +1,109 @@
 # Zeitstempel Arbeitszeiten
 
-Eine bewusst einfache, vollständig deutsche und local-first Arbeitszeiterfassung für iPhone und Desktop. Baustellen, Stempelvorgänge, Pausen und Änderungen werden zuerst atomar in IndexedDB gespeichert. Eine persistente Outbox synchronisiert sie anschließend mit Convex; Netzwerkfehler löschen niemals lokale Daten.
+Eine local-first Arbeitszeiterfassung für Menschen, die keine Zeiterfassungssoftware verwalten wollen.
 
-## Architektur
+**Zeitstempel** ist eine installierbare PWA für iPhone und Desktop. Der Kern-Workflow ist bewusst manuell-first: Arbeitszeit, Ende und Pause lassen sich in wenigen Sekunden eintragen oder später korrigieren. Live-Stempeln bleibt als optionale Komfortfunktion erhalten, ist aber nicht Voraussetzung für korrekte Daten.
 
-- Vite, React und TypeScript Strict Mode
-- Dexie/IndexedDB als primäre Datenquelle, getrennt nach `user_id`
-- atomare Entitäts-/Outbox-Transaktionen, Soft Deletes und persistente Konfliktkopien
-- Convex Auth mit E-Mail/Passwort, reaktive Queries und revisionsgeprüfter Sync
-- zentrale Europe/Berlin-Domainlogik für UI, Wochen-/Monatssummen, CSV und PDF
-- Workbox-PWA mit App-Shell-Cache, Update-Hinweis, Safe Areas und lokalen Icons
-- idempotente Migration von `zt_v1` und `zt_v2` mit unveränderter Rohdatensicherung
+[Live-Demo ohne Login](https://arbeitszeitenapp.vercel.app/?demo=1)
 
-Ohne `VITE_CONVEX_URL` kann die lokale Demo ohne Konto gestartet werden. Echte Konten und Synchronisierung benötigen ein erreichbares Convex-Deployment.
+![Mobile Vorschau](docs/portfolio-mobile.png)
 
-Convex ist das Backend der App. Der lokale Entwicklungs-Stack wird mit `npm run convex:once` gestartet. Das Production-Build nutzt die bereitgestellte Convex-Cloud-Deployment-URL aus `.env.production`; das Schema liegt in `convex/schema.ts`, Auth in `convex/auth.ts`, Datenzugriff in `convex/records.ts`. Es ist keine Datenmigration erforderlich, weil das frühere Backend leer ist.
+## Produktprinzipien
 
-## Status und Umfang
+- **Einfach an der Oberfläche:** klare deutsche Sprache, große Touch-Ziele, wenige Entscheidungen.
+- **Robust unter der Haube:** jeder Schreibvorgang landet zuerst lokal in IndexedDB.
+- **Offline-first:** Netzprobleme dürfen keinen Zeiteintrag verlieren.
+- **Korrigierbar statt fragil:** Zeiten können jederzeit nachgetragen und geändert werden.
+- **Kein Feature-Bloat:** Baustellen, Zeiten, Auswertungen und Einstellungen bleiben die vier Kernbereiche.
+## Was technisch interessant ist
 
-**Implementierter Browser/PWA-Prototyp.** Der aktuelle Quellstand enthält die lokale Zeiterfassung, Convex-Auth/Sync, Offline-Outbox, Konfliktkopien, Migration, CSV/PDF-Export und eine Demo ohne Login. Eine native iOS-App oder ein separates Mobile-Binary ist nicht Bestandteil dieses Repositories.
+- React 19, Vite und TypeScript im Strict Mode
+- Dexie/IndexedDB als primäre lokale Datenquelle
+- persistente Outbox für Cloud-Synchronisierung
+- Convex als Backend inklusive Auth und serverseitiger Benutzertrennung
+- revisionsgeprüfter Sync mit erhaltenen Konfliktkopien statt stillem Last-write-wins
+- Workbox-PWA mit Offline-App-Shell und iPhone-Safe-Area-Unterstützung
+- zentrale Europe/Berlin-Zeitlogik für Nachtarbeit, DST und Soll-/Ist-Berechnung
+- CSV- und lazy-geladener PDF-Export
+- idempotente Migration alter lokaler Daten inklusive Rohdatensicherung
 
-Eine separate Feature-Roadmap ist im Repository nicht festgelegt. Für einen produktiven Betrieb müssen ein erreichbares Convex-Deployment und ein separates Testkonto für den vollständigen Auth-E2E-Pfad vorhanden sein; beides wird hier nicht als bereits bereitgestellt behauptet.
+## Datenfluss
 
-## Öffentliche Vorschau ohne Login
+```text
+UI
+ ↓
+IndexedDB / Dexie  ← sofortige lokale Speicherung
+ ↓
+persistente Outbox
+ ↓
+Convex Sync
+ ↓
+konto-getrennte Cloud-Daten
+```
 
-Die Oberfläche kann ohne Konto als lokale Demo geöffnet werden:
+Die Oberfläche liest ebenfalls aus der lokalen Datenbank. Dadurch bleibt die App auch bei instabiler Verbindung reaktionsfähig.
+## Demo und Auth
 
-- Verifizierte anonyme Production-Demo: `https://arbeitszeitenapp.vercel.app/?demo=1`
-- lokal: `http://localhost:5173/?demo=1`
+Die öffentliche Demo startet ohne Konto über:
 
-Die Demo legt ausschließlich Beispieldaten in einem getrennten lokalen `demo-preview`-Profil an. Änderungen werden nicht an Convex gesendet. Echte Arbeitsdaten bleiben hinter dem Convex-Auth-Login geschützt. Auf der Login-Seite gibt es zusätzlich den Button „Demo ansehen – ohne Login“.
+```text
+https://arbeitszeitenapp.vercel.app/?demo=1
+```
 
-## Entwicklung
+Sie verwendet ein vollständig getrenntes lokales Demo-Profil und synchronisiert keine Beispieldaten zu Convex.
+
+Echte Konten verwenden Convex Auth mit E-Mail und Passwort. Arbeitsdaten werden serverseitig anhand der authentifizierten Identität getrennt.
+
+## Qualitätssicherung
+
+```bash
+npm ci
+npm run check
+npm run test:e2e
+npm run audit:prod
+```
+
+`npm run check` führt Typecheck, ESLint, Vitest und den Production-Build aus. Die GitHub-Actions-Pipeline ergänzt einen Chromium-E2E-Lauf und einen Audit der Production-Dependencies.
+
+Die Unit-Suite deckt unter anderem Domainlogik, Migration, Backup/Restore, Reports und Repository-Verhalten ab. Playwright prüft die öffentliche Demo, Live-Stempeln, Offline-Persistenz sowie Bearbeiten/Löschen/Wiederherstellen.
+## Lokale Entwicklung
 
 ```bash
 npm install
 npm run dev
-npm run typecheck
-npm run lint
-npm test
-npm run test:e2e
-npm run build
-npm run preview
 ```
 
-Lokale Konfiguration (`.env.local`):
+Lokale Convex-Konfiguration:
 
 ```env
 VITE_CONVEX_URL=http://127.0.0.1:3210
 VITE_CONVEX_SITE_URL=http://127.0.0.1:3211
 ```
 
-Das Production-Build verwendet `.env.production` mit der öffentlichen Convex-Cloud-URL. Diese URLs sind keine Geheimnisse; Authentifizierung und Arbeitsdaten bleiben serverseitig geschützt.
+Für einen lokalen Convex-Stack:
 
-## Auth und Sync
+```bash
+npm run convex:once
+```
 
-Neue Konten werden direkt über Convex Auth mit E-Mail und Passwort erstellt. Arbeitsdaten bleiben zuerst in IndexedDB und werden über die Convex-Outbox synchronisiert. Convex filtert alle Daten serverseitig nach dem angemeldeten Konto.
+Das Production-Build verwendet die Convex-Cloud-Deployment-URL aus der Deployment-Umgebung.
 
-### Konfliktstrategie
+## Installation als PWA
 
-Lokale Datensätze tragen die zuletzt bekannte Server-`revision`. Vor einem Update wird die Remote-Revision gelesen; das Update verwendet anschließend Compare-and-swap. Bei einer neueren Remote-Version werden lokale und Remote-Fassung in IndexedDB unter `conflicts` bewahrt. Der lokale Datensatz bleibt bestehen und der Sync zeigt einen Fehler; es erfolgt kein stilles Last-write-wins.
+Auf dem iPhone: Deployment in Safari öffnen → **Teilen** → **Zum Home-Bildschirm**. Nach der ersten vollständigen Online-Ladung funktioniert die App-Shell offline; Arbeitsdaten werden ohnehin zuerst lokal gespeichert.
 
-## Zeit- und Pausenregeln
+## Sicherheits- und Datenmodell
 
-Timestamps sind ISO-Instants; `work_date` ist der lokale Starttag in `Europe/Berlin`. Nachtschichten bleiben ein zusammenhängender Eintrag. Sommer-/Winterzeit wird über die tatsächliche Instant-Differenz berechnet. Sollminuten stammen ausschließlich aus `weekday_targets`. Mindestpausen werden tageweise berechnet, sodass mehrere Blöcke die Regel nicht umgehen; tatsächliche und automatisch ergänzte Pause bleiben getrennt.
+Convex-Funktionen ermitteln die Benutzeridentität serverseitig. Clients dürfen nicht selbst bestimmen, welchem Konto ein Datensatz gehört. Updates prüfen vorhandene Datensätze zusätzlich auf die zugehörige Benutzer-ID.
 
-## Alte Daten
+Lokale Daten bleiben pro Benutzer getrennt. Synchronisationskonflikte bewahren beide Fassungen auf, bis der Nutzer eine Version auswählt.
 
-Beim ersten Start werden Rohwerte aus `zt_v1` und `zt_v2` unverändert in IndexedDB gesichert, validiert, dedupliziert und mit `source=migration` sowie „Ohne Baustelle“ übernommen. Beschädigte Quellen bleiben erhalten und erzeugen einen sichtbaren Fehler. Die Original-Keys werden nicht gelöscht. Das vollständige JSON-Backup in Einstellungen enthält auch die Alt-Sicherung.
+## Bekannte Grenzen
 
-## Installation auf dem iPhone
+- Vollständige Auth-E2E-Tests gegen das echte Convex-Deployment benötigen ein separates Testkonto.
+- Safari kann Website-Speicher unter extremem Speicherdruck räumen; deshalb existiert zusätzlich ein vollständiger JSON-Export.
+- Die PDF-Ausgabe ist bewusst kompakt und auf Stundennachweise statt komplexes Reporting optimiert.
 
-1. Deployment in Safari öffnen und einmal vollständig laden.
-2. Teilen antippen.
-3. „Zum Home-Bildschirm“ wählen und bestätigen.
-4. App einmal online öffnen; danach funktionieren App-Shell und lokale Daten offline.
+---
 
-## Manuelle iPhone-Checkliste
-
-- Mit E-Mail und Passwort anmelden, App schließen/neu öffnen und persistente Session prüfen.
-- Baustelle anlegen, auswählen, stempeln, Pause starten, App beenden und Zustand prüfen.
-- Offline Arbeitszeit erstellen, neu laden, anschließend online gehen und Syncstatus beobachten.
-- Nachtschicht über Mitternacht manuell erfassen und Wochen-/Monatssumme kontrollieren.
-- Zwei Blöcke am selben Tag in CSV/PDF prüfen; Tagessaldo darf nur einmal erscheinen.
-- Homescreen-Icon, Standalone-Modus, Safe Areas, Touchziele und Update-Hinweis prüfen.
-- JSON-Backup speichern und die Alt-Datensicherung kontrollieren.
-
-## Verbleibende Grenzen
-
-- Safari kann Website-Speicher unter extremem Speicherdruck trotz `navigator.storage.persist()` räumen; regelmäßige JSON-Backups bleiben sinnvoll.
-- Vollständige Convex-Auth-E2E-Tests benötigen ein separates Testkonto. Die normale Suite läuft ohne Secrets.
-- PDF ist bewusst kompakt; sehr lange Notizen werden umbrochen, nicht als aufwendiges Tabellenlayout gesetzt.
+**Designziel:** powerful under the hood, langweilig einfach in der Bedienung.

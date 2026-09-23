@@ -16,7 +16,7 @@ import {
 } from './lib/date';
 import { migrateLegacy, legacyBackup, type MigrationResult } from './migration';
 import { freshBase, resolveConflict, restore, saveLocal, softDelete } from './repository';
-import { createCsv, createPdf, downloadBlob, reportRows } from './reports';
+import { createCsv, downloadBlob, reportRows } from './reports';
 import { convexConfigured } from './convex';
 import { installRealtime, installSyncTriggers, pullRemote, syncNow } from './sync';
 import {
@@ -413,9 +413,23 @@ export function App() {
                 {formatMinutes(todaySummary.automaticBreak)} · netto{' '}
                 {formatMinutes(todaySummary.work)}
               </p>
-              <button className={`stamp ${active ? 'stop' : ''}`} onClick={() => void startStop()}>
-                {active ? 'Arbeit beenden' : 'Arbeit starten'}
-              </button>
+              <div className="quick-actions">
+                <button
+                  className="primary-entry"
+                  onClick={() => setEntryDialog(newEntry(userId, today))}
+                >
+                  Arbeitszeit eintragen
+                </button>
+                <button
+                  className={`timer-action ${active ? 'stop' : ''}`}
+                  onClick={() => void startStop()}
+                >
+                  {active ? 'Laufende Zeit beenden' : 'Live stempeln'}
+                </button>
+              </div>
+              <p className="manual-hint">
+                Start, Ende und Pause lassen sich jederzeit nachtragen oder korrigieren.
+              </p>
               {active && (
                 <button className="pause" onClick={() => void toggleBreak()}>
                   {openBreak ? 'Pause beenden' : 'Pause starten'}
@@ -556,7 +570,7 @@ export function App() {
       <nav aria-label="Hauptnavigation">
         {(
           [
-            ['clock', 'Stempeln'],
+            ['clock', 'Heute'],
             ['times', 'Zeiten'],
             ['projects', 'Baustellen'],
             ['settings', 'Einstellungen'],
@@ -1116,7 +1130,11 @@ function ExportPanel({ data }: { data: Data }) {
         </button>
         <button
           className="secondary"
-          onClick={() => downloadBlob(createPdf(rows), 'stundennachweis.pdf')}
+          onClick={() =>
+            void import('./pdf').then(({ createPdf }) =>
+              downloadBlob(createPdf(rows), 'stundennachweis.pdf'),
+            )
+          }
         >
           PDF
         </button>
